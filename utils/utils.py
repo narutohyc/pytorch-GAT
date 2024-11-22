@@ -1,10 +1,7 @@
 import re
 import os
 
-
-import git
 import numpy as np
-
 
 from utils.constants import BINARIES_PATH, LayerType
 
@@ -46,6 +43,7 @@ def name_to_layer_type(name):
 
 
 def get_training_state(training_config, model):
+    import git
     training_state = {
         "commit_hash": git.Repo(search_parent_directories=True).head.object.hexsha,
 
@@ -89,7 +87,7 @@ def get_available_binary_name(dataset_name='unknown'):
 
 
 def print_model_metadata(training_state):
-    header = f'\n{"*"*5} Model training metadata: {"*"*5}'
+    header = f'\n{"*" * 5} Model training metadata: {"*" * 5}'
     print(header)
 
     for key, value in training_state.items():

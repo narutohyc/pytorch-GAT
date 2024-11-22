@@ -1,11 +1,10 @@
 import argparse
+import copy
 import time
-
 
 import torch
 import torch.nn as nn
 from torch.optim import Adam
-
 
 from models.definitions.GAT import GAT
 from utils.data_loading import load_graph_data
@@ -14,8 +13,8 @@ import utils.utils as utils
 
 
 # Simple decorator function so that I don't have to pass arguments that don't change from epoch to epoch
-def get_main_loop(config, gat, cross_entropy_loss, optimizer, node_features, node_labels, edge_index, train_indices, val_indices, test_indices, patience_period, time_start):
-
+def get_main_loop(config, gat, cross_entropy_loss, optimizer, node_features, node_labels, edge_index, train_indices,
+                  val_indices, test_indices, patience_period, time_start):
     node_dim = 0  # node axis
 
     train_labels = node_labels.index_select(node_dim, train_indices)
@@ -57,6 +56,7 @@ def get_main_loop(config, gat, cross_entropy_loss, optimizer, node_features, nod
         # Do a forwards pass and extract only the relevant node scores (train/val or test ones)
         # Note: [0] just extracts the node_features part of the data (index 1 contains the edge_index)
         # shape = (N, C) where N is the number of nodes in the split (train/val/test) and C is the number of classes
+        tmp = copy.deepcopy(graph_data[0][0])
         nodes_unnormalized_scores = gat(graph_data)[0].index_select(node_dim, node_indices)
 
         # Example: let's take an output for a single node on Cora - it's a vector of size 7 and it contains unnormalized
@@ -69,10 +69,12 @@ def get_main_loop(config, gat, cross_entropy_loss, optimizer, node_features, nod
         loss = cross_entropy_loss(nodes_unnormalized_scores, gt_node_labels)
 
         if phase == LoopPhase.TRAIN:
+            print(f"==========  {loss}")
             optimizer.zero_grad()  # clean the trainable weights gradients in the computational graph (.grad fields)
             loss.backward()  # compute the gradients for every trainable weight in the computational graph
             optimizer.step()  # apply the gradients to weights
 
+        print(f"====== {all(tmp == graph_data[0][0])}")
         # Calculate the main metric - accuracy
 
         # Finds the index of maximum (unnormalized) score for every node and that's the class prediction for that node.
@@ -104,7 +106,8 @@ def get_main_loop(config, gat, cross_entropy_loss, optimizer, node_features, nod
 
             # Log to console
             if config['console_log_freq'] is not None and epoch % config['console_log_freq'] == 0:
-                print(f'GAT training: time elapsed= {(time.time() - time_start):.2f} [s] | epoch={epoch + 1} | val acc={accuracy}')
+                print(
+                    f'GAT training: time elapsed= {(time.time() - time_start):.2f} [s] | epoch={epoch + 1} | val acc={accuracy}')
 
             # The "patience" logic - should we break out from the training loop? If either validation acc keeps going up
             # or the val loss keeps going down we won't stop
@@ -189,10 +192,8 @@ def train_gat_cora(config):
         config['test_perf'] = -1
 
     # Save the latest GAT in the binaries directory
-    torch.save(
-        utils.get_training_state(config, gat),
-        os.path.join(BINARIES_PATH, utils.get_available_binary_name(config['dataset_name']))
-    )
+    torch.save(utils.get_training_state(config, gat),
+               os.path.join(BINARIES_PATH, utils.get_available_binary_name(config['dataset_name'])))
 
 
 def get_training_args():
@@ -200,19 +201,24 @@ def get_training_args():
 
     # Training related
     parser.add_argument("--num_of_epochs", type=int, help="number of training epochs", default=10000)
-    parser.add_argument("--patience_period", type=int, help="number of epochs with no improvement on val before terminating", default=1000)
+    parser.add_argument("--patience_period", type=int,
+                        help="number of epochs with no improvement on val before terminating", default=1000)
     parser.add_argument("--lr", type=float, help="model learning rate", default=5e-3)
     parser.add_argument("--weight_decay", type=float, help="L2 regularization on model weights", default=5e-4)
-    parser.add_argument("--should_test", action='store_true', help='should test the model on the test dataset? (no by default)')
+    parser.add_argument("--should_test", action='store_true',
+                        help='should test the model on the test dataset? (no by default)')
 
     # Dataset related
-    parser.add_argument("--dataset_name", choices=[el.name for el in DatasetType], help='dataset to use for training', default=DatasetType.CORA.name)
+    parser.add_argument("--dataset_name", choices=[el.name for el in DatasetType], help='dataset to use for training',
+                        default=DatasetType.CORA.name)
     parser.add_argument("--should_visualize", action='store_true', help='should visualize the dataset? (no by default)')
 
     # Logging/debugging/checkpoint related (helps a lot with experimentation)
     parser.add_argument("--enable_tensorboard", action='store_true', help="enable tensorboard logging (no by default)")
-    parser.add_argument("--console_log_freq", type=int, help="log to output console (epoch) freq (None for no logging)", default=100)
-    parser.add_argument("--checkpoint_freq", type=int, help="checkpoint model saving (epoch) freq (None for no logging)", default=1000)
+    parser.add_argument("--console_log_freq", type=int, help="log to output console (epoch) freq (None for no logging)",
+                        default=100)
+    parser.add_argument("--checkpoint_freq", type=int,
+                        help="checkpoint model saving (epoch) freq (None for no logging)", default=1000)
     args = parser.parse_args()
 
     # Model architecture related
@@ -238,6 +244,5 @@ def get_training_args():
 
 
 if __name__ == '__main__':
-
     # Train the graph attention network (GAT)
     train_gat_cora(get_training_args())

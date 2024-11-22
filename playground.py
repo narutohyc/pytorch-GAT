@@ -1,24 +1,24 @@
-import time
-import os
-from collections import defaultdict
 import enum
+import os
+import time
+from collections import defaultdict
 
-
-import torch
-import scipy.sparse as sp
-from scipy.stats import entropy
-from sklearn.manifold import TSNE
+import igraph as ig
 import matplotlib.pyplot as plt
 import numpy as np
-import igraph as ig
+import scipy.sparse as sp
+import torch
+from scipy.stats import entropy
+from sklearn.manifold import TSNE
 
-
-from utils.data_loading import normalize_features_sparse, normalize_features_dense, pickle_save, pickle_read, load_graph_data
-from utils.constants import CORA_PATH, BINARIES_PATH, DatasetType, LayerType, DATA_DIR_PATH, cora_label_to_color_map, VisualizationType
-from utils.visualizations import draw_entropy_histogram
 from models.definitions.GAT import GAT
-from utils.utils import print_model_metadata, convert_adj_to_edge_index, name_to_layer_type
 from training_script_cora import train_gat_cora, get_training_args
+from utils.constants import CORA_PATH, BINARIES_PATH, DatasetType, LayerType, DATA_DIR_PATH, cora_label_to_color_map, \
+    VisualizationType
+from utils.data_loading import normalize_features_sparse, normalize_features_dense, pickle_save, pickle_read, \
+    load_graph_data
+from utils.utils import print_model_metadata, convert_adj_to_edge_index, name_to_layer_type
+from utils.visualizations import draw_entropy_histogram
 
 
 def profile_sparse_matrix_formats(node_features_csr):
@@ -58,7 +58,7 @@ def profile_sparse_matrix_formats(node_features_csr):
 
 
 def to_GBs(memory_in_bytes):  # beautify memory output - helper function
-    return f'{memory_in_bytes / 2**30:.2f} GBs'
+    return f'{memory_in_bytes / 2 ** 30:.2f} GBs'
 
 
 def profile_gat_implementations(skip_if_profiling_info_cached=False, store_cache=False):
@@ -111,7 +111,7 @@ def profile_gat_implementations(skip_if_profiling_info_cached=False, store_cache
 
                 ts = time.time()
                 train_gat_cora(training_config)  # train and validation
-                results_time[gat_layer_imp.name].append(time.time()-ts)  # collect timing information
+                results_time[gat_layer_imp.name].append(time.time() - ts)  # collect timing information
 
                 # These 2 methods basically query this function: torch.cuda.memory_stats() it contains much more detail.
                 # Here I just care about the peak memory usage i.e. whether you can train GAT on your device.
@@ -161,7 +161,8 @@ def visualize_graph_dataset(dataset_name):
     load_graph_data(config, device)
 
 
-def visualize_gat_properties(model_name=r'gat_000000.pth', dataset_name=DatasetType.CORA.name, visualization_type=VisualizationType.ATTENTION):
+def visualize_gat_properties(model_name=r'gat_000000.pth', dataset_name=DatasetType.CORA.name,
+                             visualization_type=VisualizationType.ATTENTION):
     """
     Notes on t-SNE:
     Check out this one for more intuition on how to tune t-SNE: https://distill.pub/2016/misread-tsne/
@@ -200,7 +201,7 @@ def visualize_gat_properties(model_name=r'gat_000000.pth', dataset_name=DatasetT
 
     # Step 2: Prepare the model
     model_path = os.path.join(BINARIES_PATH, model_name)
-    model_state = torch.load(model_path)
+    model_state = torch.load(model_path, map_location=torch.device('cpu'))
 
     gat = GAT(
         num_of_layers=model_state['num_of_layers'],
@@ -256,7 +257,8 @@ def visualize_gat_properties(model_name=r'gat_000000.pth', dataset_name=DatasetT
 
         # Pick the target nodes to plot (nodes with highest degree + random nodes)
         # Note: there could be an overlap between random nodes and nodes with highest degree - but highly unlikely
-        nodes_of_interest_ids = np.argpartition(complete_graph.degree(), -num_nodes_of_interest)[-num_nodes_of_interest:]
+        nodes_of_interest_ids = np.argpartition(complete_graph.degree(), -num_nodes_of_interest)[
+                                -num_nodes_of_interest:]
         random_node_ids = np.random.randint(low=0, high=total_num_of_nodes, size=num_nodes_of_interest)
         nodes_of_interest_ids = np.append(nodes_of_interest_ids, random_node_ids)
         np.random.shuffle(nodes_of_interest_ids)
@@ -288,7 +290,8 @@ def visualize_gat_properties(model_name=r'gat_000000.pth', dataset_name=DatasetT
             id_to_igraph_id = dict(zip(source_node_ids, range(len(source_node_ids))))
             ig_graph = ig.Graph()
             ig_graph.add_vertices(size_of_neighborhood)
-            ig_graph.add_edges([(id_to_igraph_id[neighbor], id_to_igraph_id[target_node_id]) for neighbor in source_node_ids])
+            ig_graph.add_edges(
+                [(id_to_igraph_id[neighbor], id_to_igraph_id[target_node_id]) for neighbor in source_node_ids])
 
             # Prepare the visualization settings dictionary and plot
             visual_style = {
@@ -313,12 +316,14 @@ def visualize_gat_properties(model_name=r'gat_000000.pth', dataset_name=DatasetT
         # high dim points and between the t-Student distribution fit over low dimension points (the ones we're plotting)
         # Intuitively, by doing this, we preserve the similarities (relationships) between the high and low dim points.
         # This (probably) won't make much sense if you're not already familiar with t-SNE, God knows I've tried. :P
-        t_sne_embeddings = TSNE(n_components=2, perplexity=30, method='barnes_hut').fit_transform(all_nodes_unnormalized_scores)
+        t_sne_embeddings = TSNE(n_components=2, perplexity=30, method='barnes_hut').fit_transform(
+            all_nodes_unnormalized_scores)
 
         for class_id in range(num_classes):
             # We extract the points whose true label equals class_id and we color them in the same way, hopefully
             # they'll be clustered together on the 2D chart - that would mean that GAT has learned good representations!
-            plt.scatter(t_sne_embeddings[node_labels == class_id, 0], t_sne_embeddings[node_labels == class_id, 1], s=20, color=cora_label_to_color_map[class_id], edgecolors='black', linewidths=0.2)
+            plt.scatter(t_sne_embeddings[node_labels == class_id, 0], t_sne_embeddings[node_labels == class_id, 1],
+                        s=20, color=cora_label_to_color_map[class_id], edgecolors='black', linewidths=0.2)
         plt.show()
 
     # We want our local probability distributions (attention weights over the neighborhoods) to be
@@ -354,7 +359,7 @@ def visualize_gat_properties(model_name=r'gat_000000.pth', dataset_name=DatasetT
                     # These attention weights sum up to 1 by GAT design so we can treat it as a probability distribution
                     neigborhood_attention = all_attention_weights[target_node_ids == target_node_id].flatten()
                     # Reference uniform distribution of the same length
-                    ideal_uniform_attention = np.ones(len(neigborhood_attention))/len(neigborhood_attention)
+                    ideal_uniform_attention = np.ones(len(neigborhood_attention)) / len(neigborhood_attention)
 
                     # Calculate the entropy, check out this video if you're not familiar with the concept:
                     # https://www.youtube.com/watch?v=ErfnhcEV1O8 (Aurélien Géron)
@@ -408,6 +413,3 @@ if __name__ == '__main__':
 
     else:
         raise Exception(f'Woah, this playground function "{playground_fn}" does not exist.')
-
-
-
